@@ -270,6 +270,36 @@ class TransferTest < ActiveSupport::TestCase
     assert_equal "standard", transfer.inflow_transaction.reload.kind
   end
 
+  # A kind lock the user set before confirm is not the one
+  # update_investment_contribution! takes, so unlinking must leave it.
+  test "unlinking a confirmed transfer keeps a kind lock the user set" do
+    transfer = create_pending_transfer(from: accounts(:depository), to: accounts(:investment))
+    transfer.outflow_transaction.lock_attr!(:kind)
+    transfer.inflow_transaction.lock_attr!(:kind)
+    transfer.confirm!
+
+    transfer.destroy!
+
+    [ transfer.outflow_transaction, transfer.inflow_transaction ].each do |transaction|
+      transaction.reload
+      assert_equal "standard", transaction.kind
+      assert transaction.locked?(:kind)
+    end
+  end
+
+  test "unlinking keeps a kind lock the user set after the contribution choice" do
+    transfer = create_pending_transfer(from: accounts(:depository), to: accounts(:investment))
+    transfer.confirm!
+    transfer.update_investment_contribution!(false)
+    transfer.outflow_transaction.lock_attr!(:kind)
+
+    transfer.destroy!
+
+    outflow = transfer.outflow_transaction.reload
+    assert_equal "standard", outflow.kind
+    assert outflow.locked?(:kind)
+  end
+
   test "update_investment_contribution! turns a contribution into a plain transfer and back" do
     transfer = create_pending_transfer(from: accounts(:depository), to: accounts(:investment))
     transfer.confirm!
@@ -281,6 +311,7 @@ class TransferTest < ActiveSupport::TestCase
     assert_equal "funds_movement", outflow.kind
     assert_nil outflow.category
     assert outflow.locked?(:kind)
+    assert_kind_of ActiveSupport::TimeWithZone, outflow.entry.locked_fields_with_timestamps["kind"]
     assert_not transfer.investment_contribution?
     assert_not transfer.categorizable?
 

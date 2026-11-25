@@ -668,12 +668,14 @@ class Entry < ApplicationRecord
 
   # Returns hash of locked field names to their lock timestamps.
   # Combines locked_attributes from both entry and entryable.
-  # Parses ISO8601 timestamps stored in locked_attributes.
+  # A lock is an ISO8601 timestamp, or a hash with "locked_at" when the
+  # locker also recorded where the lock came from.
   #
   # @return [Hash{String => Time}] field name to lock timestamp
   def locked_fields_with_timestamps
     combined = (locked_attributes || {}).merge(entryable&.locked_attributes || {})
     combined.transform_values do |timestamp|
+      timestamp = timestamp["locked_at"] if timestamp.is_a?(Hash)
       Time.zone.parse(timestamp.to_s) rescue timestamp
     end
   end

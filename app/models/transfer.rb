@@ -1,4 +1,10 @@
 class Transfer < ApplicationRecord
+  # Recorded on a kind lock this transfer takes (see
+  # #update_investment_contribution!), so release can tell it from a lock
+  # the user set.
+  KIND_LOCK_SOURCE = "transfer"
+  private_constant :KIND_LOCK_SOURCE
+
   belongs_to :inflow_transaction, class_name: "Transaction", inverse_of: :transfer_as_inflow
   belongs_to :outflow_transaction, class_name: "Transaction", inverse_of: :transfer_as_outflow
 
@@ -164,7 +170,7 @@ class Transfer < ApplicationRecord
       end
 
       outflow_transaction.update!(outflow_attrs)
-      outflow_transaction.lock_attr!(:kind)
+      outflow_transaction.lock_attr!(:kind, source: KIND_LOCK_SOURCE)
     end
 
     true
@@ -277,8 +283,9 @@ class Transfer < ApplicationRecord
           # transfer kind on its transactions predates the match and stays.
           if transaction.transfer? && !pending?
             transaction.update!(kind: "standard")
-            # A kind locked by update_investment_contribution! belonged to this transfer.
-            transaction.unlock_attr!(:kind) if transaction.locked?(:kind)
+            # Only the kind lock this transfer took. A lock the user set has
+            # no source and stays, including one that predates the transfer.
+            transaction.unlock_attr!(:kind) if transaction.locked_by?(:kind, KIND_LOCK_SOURCE)
           end
           # The entry survives this destroy (only the Transfer join row and
           # fee transactions go away), but its idempotency_key must not: a

@@ -27,6 +27,20 @@ class EnrichableTest < ActiveSupport::TestCase
 
     @enrichable.lock_attr!(:name)
     assert @enrichable.locked?(:name)
+    assert_not @enrichable.locked_by?(:name, "transfer")
+  end
+
+  test "a lock can record the source that took it" do
+    @enrichable.lock_attr!(:name, source: "transfer")
+
+    assert @enrichable.locked?(:name)
+    assert @enrichable.locked_by?(:name, :transfer)
+    assert_not @enrichable.locked_by?(:name, "user")
+
+    @enrichable.lock_attr!(:name)
+
+    assert @enrichable.locked?(:name)
+    assert_not @enrichable.locked_by?(:name, "transfer")
   end
 
   test "can unlock an attribute" do

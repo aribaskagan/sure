@@ -154,8 +154,20 @@ module Enrichable
     !locked?(attr)
   end
 
-  def lock_attr!(attr)
-    update!(locked_attributes: locked_attributes.merge(attr.to_s => Time.current))
+  # source, when given, is stored with the lock time so a later caller can
+  # tell this lock from one recorded as a bare timestamp (see #locked_by?).
+  # A later lock of the same attribute replaces the previous source.
+  def lock_attr!(attr, source: nil)
+    locked_at = Time.current
+    value = source.nil? ? locked_at : { "locked_at" => locked_at, "source" => source.to_s }
+    update!(locked_attributes: locked_attributes.merge(attr.to_s => value))
+  end
+
+  # True when attr is locked and that lock records source. A lock taken
+  # without a source, the usual user edit, does not match.
+  def locked_by?(attr, source)
+    value = locked_attributes[attr.to_s]
+    value.is_a?(Hash) && value["source"] == source.to_s
   end
 
   def unlock_attr!(attr)
